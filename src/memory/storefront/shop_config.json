@@ -1,0 +1,66 @@
+{
+  "daily": [
+    {
+      "templateId": "AthenaDance:EID_KpopDance03",
+      "price": 500,
+      "name": "Scenario"
+    },
+    {
+      "templateId": "AthenaDance:EID_Fresh",
+      "price": 800,
+      "name": "Fresh"
+    },
+    {
+      "templateId": "AthenaDance:EID_Floss",
+      "price": 500,
+      "name": "Floss"
+    },
+    {
+      "templateId": "AthenaPickaxe:Pickaxe_ID_178_StarWand",
+      "price": 800,
+      "name": "Star Wand"
+    },
+    {
+      "templateId": "AthenaPickaxe:Pickaxe_Lockjaw",
+      "price": 800,
+      "name": "Reaper"
+    },
+    {
+      "templateId": "AthenaItemWrap:Wrap_050_Magma",
+      "price": 700,
+      "name": "Magma"
+    }
+  ],
+  "featured": [
+    {
+      "templateId": "AthenaCharacter:CID_408_Athena_Commando_M_Assassin",
+      "price": 2000,
+      "name": "John Wick"
+    },
+    {
+      "templateId": "AthenaCharacter:CID_313_Athena_Commando_M_KpopFashion",
+      "price": 1500,
+      "name": "Ikonik"
+    },
+    {
+      "templateId": "AthenaCharacter:CID_028_Athena_Commando_F",
+      "price": 1200,
+      "name": "Renegade Raider"
+    },
+    {
+      "templateId": "AthenaCharacter:CID_035_Athena_Commando_M_Medieval",
+      "price": 2000,
+      "name": "Black Knight"
+    },
+    {
+      "templateId": "AthenaCharacter:CID_029_Athena_Commando_F_Halloween",
+      "price": 1500,
+      "name": "Ghoul Trooper"
+    },
+    {
+      "templateId": "AthenaCharacter:CID_718_Athena_Commando_M_Cyclone",
+      "price": 1500,
+      "name": "Travis Scott"
+    }
+  ]
+}
