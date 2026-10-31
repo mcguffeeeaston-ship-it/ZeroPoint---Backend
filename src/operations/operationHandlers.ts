@@ -4,6 +4,7 @@ import McpEnvelopeFormatter from "../utilites/mcpFormatter";
 import parseUserAgent from "../utilites/agentParser";
 import EpicServiceError from "../utilites/serviceErrors";
 import XmppSessionRegistry from "../utilites/xmppRegistry";
+import ShopEngine from "../utilites/shopEngine";
 
 export async function handleQueryProfile(c: Context) {
   const accountId = c.req.param("accountId");
@@ -427,23 +428,144 @@ export async function handlePurchaseCatalogEntry(c: Context) {
 
   const { offerId, expectedTotalPrice = 0 } = body;
   const applyProfileChanges: object[] = [];
+  const athenaProfileChanges: object[] = [];
   const lootResult: object[] = [];
 
-  const mtx = commonCore.items?.["Currency:MtxPurchased"];
-  if (mtx) {
-    const cost = Math.max(0, expectedTotalPrice);
-    mtx.quantity = Math.max(0, (mtx.quantity || 0) - cost);
-    applyProfileChanges.push({
-      changeType: "itemQuantityChanged",
-      itemId: "Currency:MtxPurchased",
-      quantity: mtx.quantity,
-    });
+  const offer = await ShopEngine.findOffer(offerId);
+
+  let isMtxGrantOffer = false;
+  if (offer?.metaInfo && Array.isArray(offer.metaInfo)) {
+    const mtxMeta = offer.metaInfo.find((m: any) => m.key === "MtxQuantity");
+    if (mtxMeta) {
+      const grantAmount = parseInt(mtxMeta.value || "0", 10);
+      if (grantAmount > 0) {
+        isMtxGrantOffer = true;
+        if (!commonCore.items) commonCore.items = {};
+        if (!commonCore.items["Currency:MtxPurchased"]) {
+          commonCore.items["Currency:MtxPurchased"] = {
+            templateId: "Currency:MtxPurchased",
+            attributes: { platform: "EpicPC" },
+            quantity: 0,
+          };
+        }
+        commonCore.items["Currency:MtxPurchased"].quantity += grantAmount;
+        applyProfileChanges.push({
+          changeType: "itemQuantityChanged",
+          itemId: "Currency:MtxPurchased",
+          quantity: commonCore.items["Currency:MtxPurchased"].quantity,
+        });
+        lootResult.push({
+          itemType: "Currency:MtxPurchased",
+          itemGuid: "Currency:MtxPurchased",
+          itemProfile: "common_core",
+          quantity: grantAmount,
+        });
+      }
+    }
   }
 
-  const isBattlePass = typeof offerId === "string" && (offerId.toLowerCase().includes("battlepass") || offerId.toLowerCase().includes("bp"));
+  if (!isMtxGrantOffer) {
+    const price = offer?.prices?.[0]?.finalPrice ?? expectedTotalPrice ?? 0;
+    const mtx = commonCore.items?.["Currency:MtxPurchased"];
+    if (mtx && price > 0) {
+      mtx.quantity = Math.max(0, (mtx.quantity || 0) - price);
+      applyProfileChanges.push({
+        changeType: "itemQuantityChanged",
+        itemId: "Currency:MtxPurchased",
+        quantity: mtx.quantity,
+      });
+    }
+  }
+
+  const isBattlePass =
+    (typeof offer?.devName === "string" && offer.devName.toLowerCase().includes("battlepass")) ||
+    (typeof offerId === "string" && (offerId.toLowerCase().includes("battlepass") || offerId.toLowerCase().includes("bp") || offerId.includes("33E185A84ED7B64F2856E69AADFD092C")));
+
   if (isBattlePass && athena.stats?.attributes) {
     athena.stats.attributes.book_purchased = true;
     athena.stats.attributes.book_level = Math.max(athena.stats.attributes.book_level || 1, 1);
+    athenaProfileChanges.push({
+      changeType: "statModified",
+      name: "book_purchased",
+      value: true,
+    });
+    athenaProfileChanges.push({
+      changeType: "statModified",
+      name: "book_level",
+      value: athena.stats.attributes.book_level,
+    });
+
+    const starterPassRewards = [
+      "AthenaCharacter:cid_398_athena_commando_f_rebelslice",
+      "AthenaCharacter:cid_399_athena_commando_m_battlesuit",
+    ];
+    for (const rewardTemplate of starterPassRewards) {
+      if (!athena.items[rewardTemplate]) {
+        athena.items[rewardTemplate] = {
+          templateId: rewardTemplate,
+          attributes: {
+            favorite: false,
+            item_seen: false,
+            level: 1,
+            variants: [],
+          },
+          quantity: 1,
+        };
+        athenaProfileChanges.push({
+          changeType: "itemAdded",
+          itemId: rewardTemplate,
+          item: athena.items[rewardTemplate],
+        });
+        lootResult.push({
+          itemType: rewardTemplate,
+          itemGuid: rewardTemplate,
+          itemProfile: "athena",
+          quantity: 1,
+        });
+      }
+    }
+  }
+
+  const isTierBoost =
+    typeof offer?.devName === "string" &&
+    (offer.devName.toLowerCase().includes("singletier") || offer.devName.toLowerCase().includes("tier"));
+
+  if (isTierBoost && athena.stats?.attributes) {
+    athena.stats.attributes.book_level = Math.min(100, (athena.stats.attributes.book_level || 1) + 1);
+    athenaProfileChanges.push({
+      changeType: "statModified",
+      name: "book_level",
+      value: athena.stats.attributes.book_level,
+    });
+  }
+
+  if (offer && Array.isArray(offer.itemGrants) && offer.itemGrants.length > 0) {
+    for (const grant of offer.itemGrants) {
+      const templateId = grant.templateId;
+      const quantity = grant.quantity || 1;
+      if (!athena.items) athena.items = {};
+      athena.items[templateId] = {
+        templateId,
+        attributes: {
+          favorite: false,
+          item_seen: false,
+          level: 1,
+          variants: [],
+        },
+        quantity,
+      };
+      athenaProfileChanges.push({
+        changeType: "itemAdded",
+        itemId: templateId,
+        item: athena.items[templateId],
+      });
+      lootResult.push({
+        itemType: templateId,
+        itemGuid: templateId,
+        itemProfile: "athena",
+        quantity,
+      });
+    }
   }
 
   commonCore.rvn = (commonCore.rvn || 0) + 1;
@@ -460,7 +582,66 @@ export async function handlePurchaseCatalogEntry(c: Context) {
       athena,
       applyProfileChanges,
       lootResult,
-      "common_core"
+      "common_core",
+      athenaProfileChanges
+    )
+  );
+}
+
+export async function handlePurchaseBattlePassTiers(c: Context) {
+  const accountId = c.req.param("accountId");
+
+  if (!accountId) return c.json(EpicServiceError.badRequest("Missing accountId"), 400);
+
+  const commonCore = await ProfileDataManager.retrieveProfile(accountId, "common_core");
+  const athena = await ProfileDataManager.retrieveProfile(accountId, "athena");
+
+  if (!commonCore || !athena) return c.json(EpicServiceError.notFound("Profile not found"), 404);
+
+  const body = await c.req.json().catch(() => null);
+  if (!body) return c.json(EpicServiceError.badRequest("Invalid request body"), 400);
+
+  const tierCount = typeof body.tierCount === "number" ? body.tierCount : 1;
+  const cost = tierCount * 150;
+
+  const applyProfileChanges: object[] = [];
+  const athenaProfileChanges: object[] = [];
+
+  const mtx = commonCore.items?.["Currency:MtxPurchased"];
+  if (mtx) {
+    mtx.quantity = Math.max(0, (mtx.quantity || 0) - cost);
+    applyProfileChanges.push({
+      changeType: "itemQuantityChanged",
+      itemId: "Currency:MtxPurchased",
+      quantity: mtx.quantity,
+    });
+  }
+
+  if (athena.stats?.attributes) {
+    athena.stats.attributes.book_level = Math.min(100, (athena.stats.attributes.book_level || 1) + tierCount);
+    athenaProfileChanges.push({
+      changeType: "statModified",
+      name: "book_level",
+      value: athena.stats.attributes.book_level,
+    });
+  }
+
+  commonCore.rvn = (commonCore.rvn || 0) + 1;
+  commonCore.commandRevision = (commonCore.commandRevision || 0) + 1;
+  await ProfileDataManager.commitProfile(accountId, "common_core", commonCore);
+
+  athena.rvn = (athena.rvn || 0) + 1;
+  athena.commandRevision = (athena.commandRevision || 0) + 1;
+  await ProfileDataManager.commitProfile(accountId, "athena", athena);
+
+  return c.json(
+    McpEnvelopeFormatter.createPurchaseEnvelope(
+      commonCore,
+      athena,
+      applyProfileChanges,
+      [],
+      "common_core",
+      athenaProfileChanges
     )
   );
 }
@@ -678,6 +859,7 @@ export const registeredOperations: Record<string, (c: Context) => Promise<any>> 
   SetItemFavoriteStatusBatch: handleSetItemFavoriteStatusBatch,
   MarkItemSeen: handleMarkItemSeen,
   PurchaseCatalogEntry: handlePurchaseCatalogEntry,
+  PurchaseBattlePassTiers: handlePurchaseBattlePassTiers,
   ClaimMfaEnabled: handleClaimMfaEnabled,
   GiftCatalogEntry: handleGiftCatalogEntry,
   RemoveGiftBox: handleRemoveGiftBox,

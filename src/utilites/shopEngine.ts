@@ -47,7 +47,7 @@ export interface CatalogStorefrontEntry {
   catalogGroupPriority: number;
 }
 
-const registeredOffers = new Map<string, CatalogStorefrontEntry>();
+const registeredOffers = new Map<string, CatalogStorefrontEntry | any>();
 
 function generateOfferHash(templateId: string, section: string): string {
   return "v2:/" + createHash("sha1").update(`${section}_${templateId}`).digest("hex");
@@ -118,7 +118,6 @@ function constructEntry(item: ShopItemConfig, section: "Featured" | "Daily", pri
 
 export class ShopEngine {
   static async loadCatalogStorefronts(): Promise<any[]> {
-    registeredOffers.clear();
     const configPath = path.join(process.cwd(), "src", "memory", "storefront", "shop_config.json");
     let shopData = { daily: [] as ShopItemConfig[], featured: [] as ShopItemConfig[] };
 
@@ -141,6 +140,8 @@ export class ShopEngine {
       featuredEntries.push(constructEntry(item, "Featured", featuredPriority++));
     }
 
+    await this.indexSeasonAndCurrencyOffers();
+
     return [
       {
         name: "BRWeeklyStorefront",
@@ -153,8 +154,57 @@ export class ShopEngine {
     ];
   }
 
-  static findOffer(offerId: string): CatalogStorefrontEntry | undefined {
-    return registeredOffers.get(offerId);
+  static async indexSeasonAndCurrencyOffers(): Promise<void> {
+    const seasonFiles = ["BRSeason9.json", "BRSeason8.json", "BRSeason7.json", "BRSeason10.json", "BRSeason12.json", "BRSeason13.json"];
+    for (const fileName of seasonFiles) {
+      const filePath = path.join(process.cwd(), "src", "memory", "storefront", fileName);
+      const file = Bun.file(filePath);
+      if (await file.exists()) {
+        try {
+          const data = await file.json();
+          if (data && Array.isArray(data.catalogEntries)) {
+            for (const entry of data.catalogEntries) {
+              if (entry.offerId) {
+                registeredOffers.set(entry.offerId, entry);
+              }
+            }
+          }
+        } catch {}
+      }
+    }
+
+    const currencyPath = path.join(process.cwd(), "src", "memory", "storefront", "both", "CurrencyStorefront.json");
+    const currFile = Bun.file(currencyPath);
+    if (await currFile.exists()) {
+      try {
+        const currData = await currFile.json();
+        if (Array.isArray(currData)) {
+          for (const entry of currData) {
+            if (entry.offerId) {
+              registeredOffers.set(entry.offerId, entry);
+            }
+          }
+        }
+      } catch {}
+    }
+  }
+
+  static async findOffer(offerId: string): Promise<CatalogStorefrontEntry | any | undefined> {
+    if (registeredOffers.size === 0) {
+      await this.loadCatalogStorefronts();
+    }
+
+    let match = registeredOffers.get(offerId);
+    if (match) return match;
+
+    const lower = (offerId || "").toLowerCase();
+    for (const [key, value] of registeredOffers.entries()) {
+      if (key.toLowerCase() === lower) {
+        return value;
+      }
+    }
+
+    return undefined;
   }
 }
 

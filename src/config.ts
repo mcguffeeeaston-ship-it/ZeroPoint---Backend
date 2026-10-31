@@ -9,6 +9,7 @@ export const config = {
   defaultSeason: parseInt(process.env.SEASON || "9", 10),
   grantAllCosmetics: process.env.GRANT_ALL_COSMETICS !== "false",
   defaultVbucks: parseInt(process.env.DEFAULT_VBUCKS || "999999", 10),
+  customLobbyBackgroundUrl: process.env.CUSTOM_LOBBY_BACKGROUND_URL || "",
   gameServer: {
     ip: process.env.GAMESERVER_IP || "127.0.0.1",
     port: parseInt(process.env.GAMESERVER_PORT || "7777", 10),

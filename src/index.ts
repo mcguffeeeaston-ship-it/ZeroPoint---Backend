@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import path from "node:path";
 import config from "./config";
 import connectMongo from "./utilites/mongoConnector";
 import logger from "./utilites/appLogger";
@@ -40,6 +41,23 @@ app.get("/", (c) => {
     season: 9,
     description: "Universal OGFN Backend powered by Bun and Hono",
   });
+});
+
+app.get("/static/images/:file", async (c) => {
+  const file = c.req.param("file");
+  const filePath = path.join(process.cwd(), "src", "static", "images", path.basename(file));
+  const fileHandle = Bun.file(filePath);
+  if (await fileHandle.exists()) {
+    const ext = path.extname(file).toLowerCase();
+    const contentType = ext === ".png" ? "image/png" : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "application/octet-stream";
+    return new Response(fileHandle, {
+      headers: {
+        "Content-Type": contentType,
+        "Cache-Control": "public, max-age=86400",
+      },
+    });
+  }
+  return c.text("Image not found", 404);
 });
 
 mountAuthenticationRoutes(app);

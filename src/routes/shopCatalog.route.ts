@@ -33,7 +33,14 @@ export default function mountShopCatalogRoutes(app: Hono) {
     if (await currencyFile.exists()) {
       try {
         const data = await currencyFile.json();
-        storefronts.push(data);
+        if (Array.isArray(data)) {
+          storefronts.push({
+            name: "CurrencyStorefront",
+            catalogEntries: data,
+          });
+        } else {
+          storefronts.push(data);
+        }
       } catch {}
     }
 

@@ -28,10 +28,11 @@ export class McpEnvelopeFormatter {
 
   static createPurchaseEnvelope(
     profile: any,
-    commonCore: any,
+    secondaryProfile: any,
     profileChanges: object[],
     lootResult: object[],
-    profileId: string = "common_core"
+    profileId: string = "common_core",
+    secondaryChanges: object[] = []
   ): FormattedProfileEnvelope {
     const envelope = this.createEnvelope(profile, profileChanges, profileId);
     envelope.notifications = [
@@ -43,14 +44,15 @@ export class McpEnvelopeFormatter {
         },
       },
     ];
-    if (commonCore) {
+    if (secondaryProfile) {
+      const secProfileId = profileId === "common_core" ? "athena" : "common_core";
       envelope.multiUpdate = [
         {
-          profileRevision: commonCore.rvn || 1,
-          profileId: "common_core",
-          profileChangesBaseRevision: Math.max(0, (commonCore.rvn || 1) - 1),
-          profileChanges: [],
-          profileCommandRevision: commonCore.commandRevision || 1,
+          profileRevision: secondaryProfile.rvn || 1,
+          profileId: secProfileId,
+          profileChangesBaseRevision: Math.max(0, (secondaryProfile.rvn || 1) - 1),
+          profileChanges: secondaryChanges,
+          profileCommandRevision: secondaryProfile.commandRevision || 1,
         },
       ];
     }
